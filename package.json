@@ -1,0 +1,32 @@
+{
+  "name": "pi-jev-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Check Pi code edits against Markdown rules with TypeSafe Jev",
+  "keywords": ["pi-package", "jev", "code-review"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Reindeer-AI/pi-jev-guard.git"
+  },
+  "pi": { "extensions": ["./index.ts"] },
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "^2.0.2",
+    "minimatch": "^10.2.5",
+    "yaml": "^2.9.0"
+  },
+  "peerDependencies": { "@earendil-works/pi-coding-agent": "*" },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3"
+  }
+}
