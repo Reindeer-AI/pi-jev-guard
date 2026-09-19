@@ -2,7 +2,9 @@
 
 A Pi extension that checks proposed code edits against Markdown rules using [TypeSafe Jev](https://docs.typesafe.ai/). It reviews the proposed content before Pi writes it and returns the exact instruction text and source line range for each detected violation.
 
-The default **informative** mode reports findings without blocking edits. **Enforcement** mode blocks detected violations before writing. This is a semantic review aid, not a replacement for tests, linters, or a security sandbox.
+The default **informative** mode reports findings without blocking edits. **Enforcement** mode blocks detected violations in code selected for review. By default, code edits outside Pi's current repository are skipped without review, even in enforcement mode; see [Scope and cross-repository edits](#scope-and-cross-repository-edits).
+
+This is a semantic review aid, not a replacement for tests, linters, or a security sandbox.
 
 ## Install
 
@@ -15,6 +17,30 @@ pi install git:github.com/Reindeer-AI/pi-jev-guard
 Set `TYPESAFE_API_KEY` in Pi's environment, then restart Pi. The extension does not read `.env` files automatically. Use your shell or secret manager to provide the key; do not place it in a policy file.
 
 The package provides a generic starter policy. It contains no organization-specific policy, remote context dependency, or bundled repository instruction files.
+
+## Scope and cross-repository edits
+
+The guard selects one `instructionRoot` when the policy loads. By default, this is the Git repository root containing Pi's working directory, or the working directory itself when outside Git. It does **not** select a new root or configuration for each edited file. Installing the extension globally does not make its checks global.
+
+For example, if Pi starts in `/workspace/app-a/src`, with a Git repository rooted at `/workspace/app-a`, the default code globs produce these results:
+
+| Edit target | Behavior |
+| --- | --- |
+| `/workspace/app-a/src/main.ts` | Reviewed. |
+| `/workspace/app-a/tests/main.test.ts` | Reviewed, even though it is outside Pi's working directory. |
+| `/workspace/app-b/src/main.ts` | Skipped without review because it is outside the active root. |
+
+For an ordinary out-of-scope code edit, the guard returns `status: "skipped"`, makes no Jev request, and permits the write in **both modes**. A successful write reports `applied: true`. `onUnavailable: block` does not block a skipped edit: no evaluation was attempted. Policy-file approval requirements still apply separately.
+
+Run `/jev status` to see the active root and config. To review code in another repository, either start Pi in that repository or deliberately expand the active config's root to a common parent, for example:
+
+```yaml
+instructionRoot: /workspace
+```
+
+Run `/jev reload` after changing the config. Code globs are then relative to `/workspace`, and matching ancestor instructions along each target's path are collected from that root downwards. Widening the root can bring additional repositories and parent-level instructions into scope, so choose it deliberately.
+
+**A shared root still uses one config.** The guard does not automatically load each target repository's `.pi/jev-guard.md`. The mode, code globs, thresholds, and explicit `ruleFiles` all come from the selected config. Use separate Pi sessions when repositories need independent configurations.
 
 ## Customize the rules
 
@@ -43,7 +69,7 @@ These are examples, not additional built-in rules. Adapt the starter policy to y
 
 ### Repository instruction files
 
-Matching Markdown files come from **the repository being edited**, not this extension's repository. For `src/payments/service.ts`, the extension searches the repository root, `src/`, and `src/payments/`. It does not load unrelated sibling directories.
+Ancestor instruction files come from the active workspace; they are not bundled with this extension. For an in-scope file, discovery follows its ancestor path from the active `instructionRoot` to the file's directory. With the default repository root, editing `src/payments/service.ts` searches that root, `src/`, and `src/payments/`, but not unrelated sibling directories. This discovery does not switch roots or configs for cross-repository targets.
 
 The default filename globs are:
 
@@ -75,7 +101,7 @@ Pi distributions with a different config-directory name use that name instead of
 | `model` | Pinned by default to `jev-1.13.0`. Retest thresholds when changing models. |
 | `instructionPatterns` | Filename globs searched along the edited file's ancestor path. |
 | `caseSensitive` | Controls instruction-name and code-glob matching; defaults to `false`. |
-| `instructionRoot` | Optional discovery boundary relative to Pi's working directory. Defaults to the repository root, or the working directory outside Git. |
+| `instructionRoot` | Root for instruction discovery and code review, resolved relative to Pi's working directory and selected when the policy loads. Defaults to that working directory's repository root, or the working directory outside Git. It does not switch automatically for cross-repository edits. |
 | `ruleFiles` | Additional Markdown policy paths relative to the config file. Missing files are evaluation failures. |
 | `include`, `exclude` | Code globs relative to the instruction root. Exclusions win. |
 | `violationThreshold` | Probabilities at or above this value are violations; default `0.85`. |
@@ -133,7 +159,7 @@ Changes to active configuration, explicit rule files, matching instruction filen
 - Code before/after content and applicable instruction text are sent to TypeSafe. Enable the extension only on material you are permitted to send to that service.
 - Exclusions cover `.env` files and common private-key paths. The request is also checked for the current API key and private-key markers. These checks are not a general secret detector.
 - The extension does not log source code, credentials, or service error bodies. Pi still records normal tool calls and results in its session history. Guard audit entries contain statuses, counts, timing, model, and cache use.
-- Only this Pi process's `edit` and `write` tools are covered. Shell commands, custom tools, external editors, and other agents can bypass the guard. Do not combine it with extensions that replace these tools for remote execution.
+- Only in-scope changes through this Pi process's `edit` and `write` tools are reviewed. Out-of-scope edits are permitted without review, including in enforcement mode; see [Scope and cross-repository edits](#scope-and-cross-repository-edits). Shell commands, custom tools, external editors, and other agents can bypass the guard. Do not combine it with extensions that replace these tools for remote execution.
 - Consistency checks are not an OS-level transaction with other processes. Use filesystem isolation for stronger enforcement.
 - HTTP failures are surfaced without automatic retries. Errors are not cached. Cancellation stops evaluation instead of permitting an informative-mode write.
 - Pinned-model responses must match the requested model. The documented `jev-latest` and `jev-preview` aliases may resolve to a versioned model.

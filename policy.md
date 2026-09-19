@@ -25,7 +25,14 @@ cacheTtlMs: 60000
 
 Copy this file to the repository being edited as `.pi/jev-guard.md`, then adapt
 the settings and rules to that repository. Matching ancestor instruction files
-are discovered in that repository automatically; they are not bundled here.
+are discovered within the active `instructionRoot`; they are not bundled here.
+
+By default, the root is the repository containing Pi's working directory, or the
+working directory itself outside Git. Ordinary code edits outside that root are
+skipped without review, even in enforcement mode. To cover sibling repositories,
+set `instructionRoot` to a common parent and run `/jev reload`. This still uses
+one config; other repositories' `.pi/jev-guard.md` files are not loaded
+automatically. Use `/jev status` to check the active root and config.
 
 Add focused requirements as paragraphs or list items below `## Rules`. Keep
 conditions and exceptions in the same block. Use `ruleFiles` for additional
